@@ -28,11 +28,7 @@
           <span id="monthLabel">This month</span>
           <select id="monthFilter" aria-label="Month filter"></select>
         </div>
-        <div class="balance-block">
-          <p>Available balance</p>
-          <h2 id="balanceAmount">₹0</h2>
-        </div>
-        <div class="summary-grid">
+        <div class="summary-grid summary-grid-top">
           <div class="summary-pill income">
             <span>Income</span>
             <strong id="incomeAmount">₹0</strong>
@@ -69,15 +65,21 @@
               <select id="category" required></select>
             </label>
             <label class="field">
-              <span>Date</span>
-              <input id="date" type="date" required />
+              <span>Sub-category</span>
+              <select id="subcategory" required></select>
             </label>
           </div>
 
-          <label class="field">
-            <span>Note</span>
-            <input id="note" type="text" maxlength="80" placeholder="e.g. Zomato, Salary, Rent" />
-          </label>
+          <div class="row-fields">
+            <label class="field">
+              <span>Date</span>
+              <input id="date" type="date" required />
+            </label>
+            <label class="field">
+              <span>Note</span>
+              <input id="note" type="text" maxlength="80" placeholder="Optional note" />
+            </label>
+          </div>
 
           <div class="form-actions">
             <button type="button" class="secondary-btn" id="cancelEdit" hidden>Cancel</button>
@@ -88,10 +90,38 @@
 
       <section class="insights-card">
         <div class="section-title">
-          <h2>Category spend</h2>
+          <h2>Sub-category spend</h2>
           <span id="topCategory">No expenses yet</span>
         </div>
         <div id="categoryBars" class="category-bars"></div>
+      </section>
+
+      <section class="category-card">
+        <div class="section-title">
+          <h2>Add category</h2>
+          <span>Customise your tracker</span>
+        </div>
+        <form id="categoryForm" class="category-form">
+          <div class="row-fields category-row">
+            <label class="field">
+              <span>Type</span>
+              <select id="newCategoryType">
+                <option value="expense">Expense</option>
+                <option value="income">Income</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Category name</span>
+              <input id="newCategoryName" type="text" maxlength="32" placeholder="e.g. Office" required />
+            </label>
+          </div>
+          <label class="field">
+            <span>Sub-categories</span>
+            <input id="newSubcategories" type="text" maxlength="120" placeholder="e.g. Lunch, Coffee, Snacks" />
+          </label>
+          <button type="submit" class="secondary-btn add-category-btn">Add category</button>
+        </form>
+        <div id="categoryList" class="category-list"></div>
       </section>
 
       <section class="transactions-card">
