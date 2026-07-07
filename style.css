@@ -84,7 +84,8 @@ main { display: grid; gap: 16px; }
 .quick-card,
 .insights-card,
 .transactions-card,
-.backup-card {
+.backup-card,
+.category-card {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--card);
@@ -121,11 +122,8 @@ main { display: grid; gap: 16px; }
   color: var(--text);
 }
 
-.balance-block { margin: 26px 0 22px; position: relative; z-index: 1; }
-.balance-block p { margin-bottom: 8px; color: var(--muted); }
-.balance-block h2 { font-size: 3.15rem; line-height: 1; letter-spacing: -0.08em; }
-
 .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; position: relative; z-index: 1; }
+.summary-grid-top { margin-top: 18px; }
 .summary-pill {
   padding: 14px;
   border-radius: 20px;
@@ -138,7 +136,7 @@ main { display: grid; gap: 16px; }
 .income strong { color: var(--income); }
 .expense strong { color: var(--expense); }
 
-.quick-card, .insights-card, .transactions-card, .backup-card { padding: 18px; }
+.quick-card, .insights-card, .transactions-card, .backup-card, .category-card { padding: 18px; }
 .section-title { margin-bottom: 14px; }
 .section-title span, .text-btn { color: var(--muted); font-size: 0.88rem; }
 .text-btn { border: 0; background: transparent; padding: 0; }
@@ -224,6 +222,19 @@ main { display: grid; gap: 16px; }
 .tx-actions { display: flex; gap: 6px; margin-top: 6px; justify-content: flex-end; }
 .mini-btn { border: 0; background: transparent; color: var(--muted); font-size: 0.8rem; padding: 2px; }
 
+.category-form { display: grid; gap: 12px; }
+.add-category-btn { justify-self: start; }
+.category-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.category-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 11px;
+  color: var(--muted);
+  background: rgba(127, 127, 127, 0.08);
+  font-size: 0.84rem;
+}
+.category-chip strong { color: var(--text); }
+
 .backup-card { display: grid; gap: 14px; }
 .backup-card p { margin-bottom: 0; color: var(--muted); line-height: 1.45; }
 .backup-actions { justify-content: flex-start; flex-wrap: wrap; }
@@ -246,6 +257,5 @@ main { display: grid; gap: 16px; }
 .toast.show { transform: translateX(-50%) translateY(0); }
 
 @media (max-width: 380px) {
-  .balance-block h2 { font-size: 2.55rem; }
   .row-fields, .summary-grid { grid-template-columns: 1fr; }
 }
