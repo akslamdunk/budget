@@ -1,26 +1,51 @@
 const STORAGE_KEY = "ak-budget-pwa-transactions-v1";
 const THEME_KEY = "ak-budget-pwa-theme-v1";
+const CATEGORY_KEY = "ak-budget-pwa-categories-v2";
 
-const categories = {
-  expense: ["Food", "Travel", "Rent", "Shopping", "Bills", "Subscriptions", "Health", "Other"],
-  income: ["Salary", "Freelance", "Gift", "Refund", "Interest", "Other"]
+const defaultCategories = {
+  expense: {
+    Food: ["Zomato", "Swiggy", "Groceries", "Dining out", "Other"],
+    Travel: ["Cab", "Metro", "Fuel", "Parking", "Other"],
+    Rent: ["House rent", "Maintenance", "Other"],
+    Shopping: ["Clothes", "Electronics", "Personal care", "Other"],
+    Bills: ["Electricity", "Water", "Gas", "Internet", "Mobile", "Other"],
+    Subscriptions: ["Netflix", "Spotify", "iCloud", "Other"],
+    Health: ["Doctor", "Medicine", "Tests", "Other"],
+    Other: ["Miscellaneous"]
+  },
+  income: {
+    Salary: ["Monthly salary", "Bonus", "Other"],
+    Freelance: ["Project", "Consulting", "Other"],
+    Gift: ["Family", "Friend", "Other"],
+    Refund: ["Shopping refund", "Travel refund", "Other"],
+    Interest: ["Savings", "FD", "Other"],
+    Other: ["Miscellaneous"]
+  }
 };
 
 const icons = {
-  Food: "🍽️", Travel: "🚕", Rent: "🏠", Shopping: "🛍️", Bills: "🧾", Subscriptions: "🔁",
-  Health: "💊", Salary: "💼", Freelance: "💻", Gift: "🎁", Refund: "↩️", Interest: "📈", Other: "✨"
+  Food: "🍽️", Zomato: "🍲", Swiggy: "🛵", Groceries: "🛒", "Dining out": "🍜",
+  Travel: "🚕", Cab: "🚖", Metro: "🚇", Fuel: "⛽", Parking: "🅿️",
+  Rent: "🏠", "House rent": "🏡", Maintenance: "🛠️",
+  Shopping: "🛍️", Clothes: "👕", Electronics: "📱", "Personal care": "🧴",
+  Bills: "🧾", Electricity: "💡", Water: "🚰", Gas: "🔥", Internet: "🌐", Mobile: "📞",
+  Subscriptions: "🔁", Netflix: "🎬", Spotify: "🎧", iCloud: "☁️",
+  Health: "💊", Doctor: "🩺", Medicine: "💊", Tests: "🧪",
+  Salary: "💼", Bonus: "🎉", Freelance: "💻", Project: "📁", Consulting: "🧠",
+  Gift: "🎁", Family: "👨‍👩‍👧", Friend: "🤝", Refund: "↩️", Interest: "📈", Other: "✨", Miscellaneous: "✨"
 };
 
 let transactions = loadTransactions();
+let categories = loadCategories();
 let editingId = null;
 
 const els = {
   form: document.getElementById("transactionForm"),
   amount: document.getElementById("amount"),
   category: document.getElementById("category"),
+  subcategory: document.getElementById("subcategory"),
   date: document.getElementById("date"),
   note: document.getElementById("note"),
-  balance: document.getElementById("balanceAmount"),
   income: document.getElementById("incomeAmount"),
   expense: document.getElementById("expenseAmount"),
   list: document.getElementById("transactionList"),
@@ -35,7 +60,12 @@ const els = {
   exportBtn: document.getElementById("exportBtn"),
   importFile: document.getElementById("importFile"),
   clearMonth: document.getElementById("clearMonth"),
-  themeToggle: document.getElementById("themeToggle")
+  themeToggle: document.getElementById("themeToggle"),
+  categoryForm: document.getElementById("categoryForm"),
+  newCategoryType: document.getElementById("newCategoryType"),
+  newCategoryName: document.getElementById("newCategoryName"),
+  newSubcategories: document.getElementById("newSubcategories"),
+  categoryList: document.getElementById("categoryList")
 };
 
 init();
@@ -55,9 +85,11 @@ function registerEvents() {
     input.addEventListener("change", () => populateCategories(input.value));
   });
 
+  els.category.addEventListener("change", () => populateSubcategories(getSelectedType(), els.category.value));
+
   els.form.addEventListener("submit", event => {
     event.preventDefault();
-    const type = document.querySelector('input[name="type"]:checked').value;
+    const type = getSelectedType();
     const amount = Number(els.amount.value);
     if (!amount || amount <= 0) return showToast("Enter a valid amount");
 
@@ -66,6 +98,7 @@ function registerEvents() {
       type,
       amount,
       category: els.category.value,
+      subcategory: els.subcategory.value,
       date: els.date.value,
       note: els.note.value.trim(),
       updatedAt: new Date().toISOString()
@@ -83,6 +116,28 @@ function registerEvents() {
     resetForm();
     buildMonthFilter();
     render();
+  });
+
+  els.categoryForm.addEventListener("submit", event => {
+    event.preventDefault();
+    const type = els.newCategoryType.value;
+    const name = cleanName(els.newCategoryName.value);
+    const subcats = els.newSubcategories.value
+      .split(",")
+      .map(cleanName)
+      .filter(Boolean);
+
+    if (!name) return showToast("Enter a category name");
+    if (!categories[type]) categories[type] = {};
+    if (categories[type][name]) return showToast("Category already exists");
+
+    categories[type][name] = subcats.length ? uniqueList(subcats) : ["General"];
+    saveCategories();
+    els.categoryForm.reset();
+    els.newCategoryType.value = type;
+    populateCategories(getSelectedType());
+    renderCategoryManager();
+    showToast("Category added");
   });
 
   els.cancelEdit.addEventListener("click", resetForm);
@@ -112,23 +167,35 @@ function registerEvents() {
   });
 }
 
-function populateCategories(type) {
-  els.category.innerHTML = categories[type].map(cat => `<option value="${cat}">${cat}</option>`).join("");
+function getSelectedType() {
+  return document.querySelector('input[name="type"]:checked').value;
+}
+
+function populateCategories(type, selectedCategory = "") {
+  const names = Object.keys(categories[type] || {});
+  els.category.innerHTML = names.map(cat => `<option value="${escapeAttr(cat)}">${escapeHtml(cat)}</option>`).join("");
+  if (selectedCategory && names.includes(selectedCategory)) els.category.value = selectedCategory;
+  populateSubcategories(type, els.category.value);
+}
+
+function populateSubcategories(type, category, selectedSubcategory = "") {
+  const values = categories[type]?.[category] || ["General"];
+  els.subcategory.innerHTML = values.map(sub => `<option value="${escapeAttr(sub)}">${escapeHtml(sub)}</option>`).join("");
+  if (selectedSubcategory && values.includes(selectedSubcategory)) els.subcategory.value = selectedSubcategory;
 }
 
 function render() {
   const visible = getFilteredTransactions();
   const income = visible.filter(tx => tx.type === "income").reduce((sum, tx) => sum + tx.amount, 0);
   const expense = visible.filter(tx => tx.type === "expense").reduce((sum, tx) => sum + tx.amount, 0);
-  const balance = income - expense;
 
   els.income.textContent = money(income);
   els.expense.textContent = money(expense);
-  els.balance.textContent = money(balance);
   els.monthLabel.textContent = formatMonth(els.monthFilter.value);
 
   renderTransactions(visible);
   renderCategoryBars(visible);
+  renderCategoryManager();
 }
 
 function renderTransactions(items) {
@@ -137,24 +204,28 @@ function renderTransactions(items) {
     return;
   }
 
-  els.list.innerHTML = items
+  els.list.innerHTML = [...items]
     .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .map(tx => `
-      <article class="transaction-item">
-        <div class="tx-icon">${icons[tx.category] || "✨"}</div>
-        <div class="tx-main">
-          <strong>${escapeHtml(tx.note || tx.category)}</strong>
-          <span>${tx.category} • ${formatDate(tx.date)}</span>
-        </div>
-        <div>
-          <div class="tx-amount ${tx.type}">${tx.type === "income" ? "+" : "-"}${money(tx.amount)}</div>
-          <div class="tx-actions">
-            <button class="mini-btn" onclick="editTransaction('${tx.id}')">Edit</button>
-            <button class="mini-btn" onclick="deleteTransaction('${tx.id}')">Delete</button>
+    .map(tx => {
+      const sub = tx.subcategory || "General";
+      const title = tx.note || sub || tx.category;
+      return `
+        <article class="transaction-item">
+          <div class="tx-icon">${icons[sub] || icons[tx.category] || "✨"}</div>
+          <div class="tx-main">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(tx.category)} • ${escapeHtml(sub)} • ${formatDate(tx.date)}</span>
           </div>
-        </div>
-      </article>
-    `).join("");
+          <div>
+            <div class="tx-amount ${tx.type}">${tx.type === "income" ? "+" : "-"}${money(tx.amount)}</div>
+            <div class="tx-actions">
+              <button class="mini-btn" onclick="editTransaction('${tx.id}')">Edit</button>
+              <button class="mini-btn" onclick="deleteTransaction('${tx.id}')">Delete</button>
+            </div>
+          </div>
+        </article>
+      `;
+    }).join("");
 }
 
 function renderCategoryBars(items) {
@@ -166,7 +237,8 @@ function renderCategoryBars(items) {
   }
 
   const totals = expenses.reduce((acc, tx) => {
-    acc[tx.category] = (acc[tx.category] || 0) + tx.amount;
+    const key = tx.subcategory || tx.category;
+    acc[key] = (acc[key] || 0) + tx.amount;
     return acc;
   }, {});
 
@@ -176,10 +248,21 @@ function renderCategoryBars(items) {
 
   els.bars.innerHTML = rows.map(([cat, total]) => `
     <div class="bar-row">
-      <div class="bar-meta"><span>${icons[cat] || "✨"} ${cat}</span><strong>${money(total)}</strong></div>
+      <div class="bar-meta"><span>${icons[cat] || "✨"} ${escapeHtml(cat)}</span><strong>${money(total)}</strong></div>
       <div class="bar-track"><div class="bar-fill" style="width: ${(total / max) * 100}%"></div></div>
     </div>
   `).join("");
+}
+
+function renderCategoryManager() {
+  const expenseCount = Object.keys(categories.expense || {}).length;
+  const incomeCount = Object.keys(categories.income || {}).length;
+  els.categoryList.innerHTML = `
+    <div class="category-chip">Expense categories: <strong>${expenseCount}</strong></div>
+    <div class="category-chip">Income categories: <strong>${incomeCount}</strong></div>
+    <div class="category-chip">Food: <strong>Zomato, Swiggy</strong></div>
+    <div class="category-chip">Bills: <strong>Electricity</strong></div>
+  `;
 }
 
 window.editTransaction = function(id) {
@@ -187,9 +270,9 @@ window.editTransaction = function(id) {
   if (!tx) return;
   editingId = id;
   document.getElementById(tx.type).checked = true;
-  populateCategories(tx.type);
+  populateCategories(tx.type, tx.category);
+  populateSubcategories(tx.type, tx.category, tx.subcategory || "");
   els.amount.value = tx.amount;
-  els.category.value = tx.category;
   els.date.value = tx.date;
   els.note.value = tx.note || "";
   els.submitBtn.textContent = "Save changes";
@@ -231,7 +314,8 @@ function getFilteredTransactions() {
 }
 
 function exportData() {
-  const blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), transactions }, null, 2)], { type: "application/json" });
+  const backup = { exportedAt: new Date().toISOString(), transactions, categories };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -250,9 +334,12 @@ function importData(event) {
       const parsed = JSON.parse(reader.result);
       const imported = Array.isArray(parsed) ? parsed : parsed.transactions;
       if (!Array.isArray(imported)) throw new Error("Invalid backup");
-      transactions = imported.filter(isValidTransaction);
+      transactions = imported.filter(isValidTransaction).map(tx => ({ ...tx, subcategory: tx.subcategory || "General" }));
+      if (parsed.categories) categories = mergeCategories(defaultCategories, parsed.categories);
       saveTransactions();
+      saveCategories();
       buildMonthFilter();
+      populateCategories(getSelectedType());
       render();
       showToast("Backup imported");
     } catch {
@@ -269,12 +356,46 @@ function isValidTransaction(tx) {
 }
 
 function loadTransactions() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  try { return (JSON.parse(localStorage.getItem(STORAGE_KEY)) || []).map(tx => ({ ...tx, subcategory: tx.subcategory || "General" })); }
   catch { return []; }
 }
 
 function saveTransactions() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
+}
+
+function loadCategories() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CATEGORY_KEY));
+    return mergeCategories(defaultCategories, saved || {});
+  } catch {
+    return structuredClone(defaultCategories);
+  }
+}
+
+function saveCategories() {
+  localStorage.setItem(CATEGORY_KEY, JSON.stringify(categories));
+}
+
+function mergeCategories(base, extra) {
+  const merged = structuredClone(base);
+  ["expense", "income"].forEach(type => {
+    Object.entries(extra?.[type] || {}).forEach(([category, subcats]) => {
+      const cleanCategory = cleanName(category);
+      if (!cleanCategory) return;
+      const values = Array.isArray(subcats) ? subcats.map(cleanName).filter(Boolean) : ["General"];
+      merged[type][cleanCategory] = uniqueList([...(merged[type][cleanCategory] || []), ...(values.length ? values : ["General"])]);
+    });
+  });
+  return merged;
+}
+
+function cleanName(value) {
+  return String(value || "").trim().replace(/\s+/g, " ").slice(0, 32);
+}
+
+function uniqueList(values) {
+  return Array.from(new Set(values));
 }
 
 function applySavedTheme() {
@@ -304,6 +425,10 @@ function formatDate(date) {
 
 function escapeHtml(value) {
   return String(value).replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
+}
+
+function escapeAttr(value) {
+  return escapeHtml(value).replace(/`/g, "&#96;");
 }
 
 let toastTimer;
