@@ -1,155 +1,88 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <meta name="theme-color" content="#111827" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Budget" />
-  <title>Budget Tracker</title>
-  <link rel="manifest" href="manifest.json" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="stylesheet" href="style.css" />
+  <meta name="description" content="PocketWise - a private, offline-first personal budget planner." />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+  <title>PocketWise Budget</title>
 </head>
 <body>
-  <div class="app-shell">
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand-row"><div class="brand-mark">P</div><div><strong>PocketWise</strong><span>Your money, made clear.</span></div></div>
+    <nav class="nav-list" aria-label="Primary">
+      <button class="nav-item active" data-view="dashboard"><span>⌂</span>Overview</button>
+      <button class="nav-item" data-view="transactions"><span>↕</span>Transactions</button>
+      <button class="nav-item" data-view="budgets"><span>◎</span>Budgets & categories</button>
+      <button class="nav-item" data-view="trips"><span>✈</span>Trips</button>
+      <button class="nav-item" data-view="currencies"><span>¤</span>Currencies</button>
+      <button class="nav-item" data-view="goals"><span>◇</span>Goals</button>
+      <button class="nav-item" data-view="insights"><span>↗</span>Insights</button>
+    </nav>
+    <div class="sidebar-card"><span class="eyebrow">PRIVATE BY DESIGN</span><strong>Your data stays on this device.</strong><p>No account. No bank sync. No cloud upload.</p></div>
+    <button id="installBtn" class="secondary-btn install-btn" hidden>Install app</button>
+  </aside>
+
+  <main class="main-content">
     <header class="topbar">
-      <div>
-        <p class="eyebrow">Personal finance</p>
-        <h1>Budget Tracker</h1>
-      </div>
-      <button class="icon-btn" id="themeToggle" aria-label="Toggle theme">☾</button>
+      <div><p class="eyebrow" id="todayLabel"></p><h1 id="pageTitle">Money overview</h1></div>
+      <div class="top-actions"><label class="month-picker-wrap"><span>Month</span><input id="monthPicker" type="month" /></label><button id="quickAddBtn" class="primary-btn">+ Add transaction</button></div>
     </header>
+    <div class="mobile-chip-nav">
+      <button data-view-jump="trips">✈ Trips</button><button data-view-jump="currencies">¤ Currencies</button><button data-view-jump="goals">◇ Goals</button><button data-view-jump="insights">↗ Insights</button>
+    </div>
 
-    <main>
-      <section class="hero-card glass">
-        <div class="hero-head">
-          <span id="monthLabel">This month</span>
-          <select id="monthFilter" aria-label="Month filter"></select>
-        </div>
-        <div class="summary-grid summary-grid-top">
-          <div class="summary-pill income">
-            <span>Income</span>
-            <strong id="incomeAmount">₹0</strong>
-          </div>
-          <div class="summary-pill expense">
-            <span>Expense</span>
-            <strong id="expenseAmount">₹0</strong>
-          </div>
-        </div>
-      </section>
+    <section id="dashboardView" class="view active-view">
+      <div class="hero-grid">
+        <article class="hero-card dark-card"><div class="hero-topline"><span>This month</span><span id="heroMonth"></span></div><div class="hero-balance-row"><div><span class="muted-light">Available to spend</span><h2 id="availableToSpend">₹0</h2></div><div class="health-chip" id="healthChip">On track</div></div><div class="hero-progress"><div id="heroProgressBar"></div></div><div class="hero-stats"><div><span>Income</span><strong id="heroIncome">₹0</strong></div><div><span>Spent</span><strong id="heroSpent">₹0</strong></div><div><span>Saved</span><strong id="heroSaved">₹0</strong></div></div></article>
+        <article class="card score-card"><div class="card-heading"><div><span class="eyebrow">BUDGET HEALTH</span><h3>Monthly score</h3></div><div class="score-ring"><strong id="budgetScore">0</strong><span>/100</span></div></div><p id="scoreMessage"></p><div class="mini-metrics"><div><span>Savings rate</span><strong id="savingsRate">0%</strong></div><div><span>Budget used</span><strong id="budgetUsed">0%</strong></div></div></article>
+      </div>
+      <div class="section-heading"><div><span class="eyebrow">PLAN VS REALITY</span><h2>Category budgets</h2></div><button class="text-btn" data-view-jump="budgets">Manage →</button></div><div id="budgetCards" class="budget-grid"></div>
+      <div class="dashboard-lower-grid"><article class="card"><div class="card-heading"><div><span class="eyebrow">CASH FLOW</span><h3>Income vs spending</h3></div><span class="soft-badge">This month</span></div><div class="chart-wrap"><canvas id="cashflowChart" width="700" height="280"></canvas></div></article><article class="card"><div class="card-heading"><div><span class="eyebrow">RECENT ACTIVITY</span><h3>Latest transactions</h3></div><button class="text-btn" data-view-jump="transactions">See all</button></div><div id="recentTransactions" class="transaction-list compact"></div></article></div>
+      <div class="dashboard-lower-grid"><article class="card"><div class="card-heading"><div><span class="eyebrow">TRAVEL</span><h3>Trip budgets</h3></div><button class="text-btn" data-view-jump="trips">Manage →</button></div><div id="tripPreview" class="mini-list"></div></article><article class="card"><div class="card-heading"><div><span class="eyebrow">FOREIGN CURRENCY</span><h3>Currency balances</h3></div><button class="text-btn" data-view-jump="currencies">Manage →</button></div><div id="currencyPreview" class="mini-list"></div></article></div>
+    </section>
 
-      <section class="quick-card">
-        <div class="section-title">
-          <h2>Add transaction</h2>
-          <span id="editHint">New entry</span>
-        </div>
+    <section id="transactionsView" class="view"><div class="toolbar card"><div><span class="eyebrow">LEDGER</span><h2>Transactions</h2></div><div class="toolbar-controls"><input id="transactionSearch" type="search" placeholder="Search transactions" /><select id="transactionFilter"><option value="all">All types</option><option value="expense">Expenses</option><option value="income">Income</option></select><select id="tripFilter"><option value="all">All trips</option></select><button id="addTransactionBtn" class="primary-btn">+ Add</button></div></div><div class="card table-card"><div id="transactionTable" class="transaction-table"></div></div></section>
 
-        <form id="transactionForm" class="transaction-form">
-          <div class="segmented" role="tablist" aria-label="Transaction type">
-            <input type="radio" id="expense" name="type" value="expense" checked />
-            <label for="expense">Expense</label>
-            <input type="radio" id="income" name="type" value="income" />
-            <label for="income">Income</label>
-          </div>
+    <section id="budgetsView" class="view">
+      <div class="toolbar card"><div><span class="eyebrow">SPENDING PLAN</span><h2>Budgets & categories</h2><p>Manage limits, categories and subcategories in one place.</p></div><div class="toolbar-actions"><button id="addCategoryBtn" class="secondary-btn">+ Category</button><button id="addBudgetBtn" class="primary-btn">+ Budget</button></div></div>
+      <div class="section-heading tight"><div><span class="eyebrow">MONTHLY LIMITS</span><h2>Category budgets</h2></div></div><div id="budgetManager" class="manager-grid"></div>
+      <div class="section-heading"><div><span class="eyebrow">STRUCTURE</span><h2>Categories & subcategories</h2></div></div><div id="categoryManager" class="manager-grid"></div>
+    </section>
 
-          <label class="field">
-            <span>Amount</span>
-            <input id="amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" required />
-          </label>
+    <section id="tripsView" class="view"><div class="toolbar card"><div><span class="eyebrow">TRAVEL BUDGETS</span><h2>Trips</h2><p>Assign a trip to transactions and compare spend against its INR budget.</p></div><button id="addTripBtn" class="primary-btn">+ Add trip</button></div><div id="tripManager" class="manager-grid"></div></section>
 
-          <div class="row-fields">
-            <label class="field">
-              <span>Category</span>
-              <select id="category" required></select>
-            </label>
-            <label class="field">
-              <span>Sub-category</span>
-              <select id="subcategory" required></select>
-            </label>
-          </div>
+    <section id="currenciesView" class="view"><div class="toolbar card"><div><span class="eyebrow">MULTI-CURRENCY</span><h2>Currencies</h2><p>Track foreign currency amounts and see their INR equivalent. Rates can refresh online or be edited manually.</p></div><button id="addCurrencyBtn" class="primary-btn">+ Add currency</button></div><div class="currency-summary card"><div><span class="eyebrow">TOTAL INR EQUIVALENT</span><h2 id="currencyTotal">₹0</h2></div><button id="refreshRatesBtn" class="secondary-btn">↻ Refresh rates</button></div><div id="currencyManager" class="manager-grid"></div><p class="fine-print">Live reference rates are fetched from Frankfurter when online. Your saved rate remains available offline.</p></section>
 
-          <div class="row-fields">
-            <label class="field">
-              <span>Date</span>
-              <input id="date" type="date" required />
-            </label>
-            <label class="field">
-              <span>Note</span>
-              <input id="note" type="text" maxlength="80" placeholder="Optional note" />
-            </label>
-          </div>
+    <section id="goalsView" class="view"><div class="toolbar card"><div><span class="eyebrow">SAVINGS</span><h2>Goals</h2></div><button id="addGoalBtn" class="primary-btn">+ Add goal</button></div><div id="goalManager" class="manager-grid"></div></section>
+    <section id="insightsView" class="view"><div class="toolbar card"><div><span class="eyebrow">BUDGET COACH</span><h2>Insights</h2></div></div><div id="insightCards" class="insight-grid"></div><article class="card"><div class="card-heading"><div><span class="eyebrow">SPENDING MIX</span><h3>Where your money goes</h3></div></div><div id="spendingBreakdown" class="breakdown-list"></div></article></section>
+  </main>
+</div>
 
-          <div class="form-actions">
-            <button type="button" class="secondary-btn" id="cancelEdit" hidden>Cancel</button>
-            <button type="submit" class="primary-btn" id="submitBtn">Add transaction</button>
-          </div>
-        </form>
-      </section>
+<nav class="mobile-nav"><button class="mobile-nav-item active" data-view="dashboard">⌂<span>Home</span></button><button class="mobile-nav-item" data-view="transactions">↕<span>Activity</span></button><button class="mobile-fab" id="mobileAddBtn">+</button><button class="mobile-nav-item" data-view="budgets">◎<span>Budget</span></button><button class="mobile-nav-item" data-view="trips">✈<span>Trips</span></button></nav>
 
-      <section class="insights-card">
-        <div class="section-title">
-          <h2>Sub-category spend</h2>
-          <span id="topCategory">No expenses yet</span>
-        </div>
-        <div id="categoryBars" class="category-bars"></div>
-      </section>
+<dialog id="transactionDialog" class="modal"><form method="dialog" id="transactionForm" class="modal-card"><input type="hidden" id="transactionEditId" /><div class="modal-heading"><div><span class="eyebrow">ENTRY</span><h2 id="transactionDialogTitle">Add transaction</h2></div><button class="icon-btn close-modal" type="button">×</button></div><div class="segmented"><button type="button" class="segment active" data-type="expense">Expense</button><button type="button" class="segment" data-type="income">Income</button></div><input type="hidden" id="transactionType" value="expense" />
+<label>Amount<div class="currency-input"><span id="transactionCurrencySymbol">₹</span><input id="transactionAmount" type="number" min="0" step="0.01" required /></div></label>
+<div class="form-row"><label>Currency<select id="transactionCurrency"><option value="INR">INR</option></select></label><label>INR equivalent<input id="transactionInrPreview" disabled value="₹0" /></label></div>
+<label>Description<input id="transactionDescription" required placeholder="e.g. Dinner, salary, Uber" /></label>
+<div class="form-row"><label>Category<select id="transactionCategory"></select></label><label>Subcategory<select id="transactionSubcategory"></select></label></div>
+<div class="form-row"><label>Trip <span class="optional">optional</span><select id="transactionTrip"><option value="">No trip</option></select></label><label>Date<input id="transactionDate" type="date" required /></label></div>
+<label>Note <span class="optional">optional</span><input id="transactionNote" /></label><div class="modal-actions"><button type="button" class="secondary-btn close-modal">Cancel</button><button class="primary-btn">Save transaction</button></div></form></dialog>
 
-      <section class="category-card">
-        <div class="section-title">
-          <h2>Add category</h2>
-          <span>Customise your tracker</span>
-        </div>
-        <form id="categoryForm" class="category-form">
-          <div class="row-fields category-row">
-            <label class="field">
-              <span>Type</span>
-              <select id="newCategoryType">
-                <option value="expense">Expense</option>
-                <option value="income">Income</option>
-              </select>
-            </label>
-            <label class="field">
-              <span>Category name</span>
-              <input id="newCategoryName" type="text" maxlength="32" placeholder="e.g. Office" required />
-            </label>
-          </div>
-          <label class="field">
-            <span>Sub-categories</span>
-            <input id="newSubcategories" type="text" maxlength="120" placeholder="e.g. Lunch, Coffee, Snacks" />
-          </label>
-          <button type="submit" class="secondary-btn add-category-btn">Add category</button>
-        </form>
-        <div id="categoryList" class="category-list"></div>
-      </section>
+<dialog id="budgetDialog" class="modal"><form id="budgetForm" class="modal-card"><input type="hidden" id="budgetEditId"/><div class="modal-heading"><div><span class="eyebrow">SPENDING LIMIT</span><h2>Set category budget</h2></div><button class="icon-btn close-modal" type="button">×</button></div><label>Category<select id="budgetCategory"></select></label><label>Monthly limit<div class="currency-input"><span>₹</span><input id="budgetAmount" type="number" min="1" required /></div></label><div class="modal-actions"><button type="button" class="secondary-btn close-modal">Cancel</button><button class="primary-btn">Save budget</button></div></form></dialog>
 
-      <section class="transactions-card">
-        <div class="section-title">
-          <h2>Transactions</h2>
-          <button class="text-btn" id="clearMonth">Clear month</button>
-        </div>
-        <div id="transactionList" class="transaction-list"></div>
-      </section>
+<dialog id="categoryDialog" class="modal"><form id="categoryForm" class="modal-card"><input type="hidden" id="categoryEditId"/><div class="modal-heading"><div><span class="eyebrow">CATEGORY</span><h2 id="categoryDialogTitle">Add category</h2></div><button class="icon-btn close-modal" type="button">×</button></div><label>Category name<input id="categoryName" required /></label><label>Subcategories <span class="optional">comma separated</span><textarea id="categorySubcategories" rows="4" placeholder="Fuel, Metro, Taxi"></textarea></label><div class="modal-actions"><button type="button" class="secondary-btn close-modal">Cancel</button><button class="primary-btn">Save category</button></div></form></dialog>
 
-      <section class="backup-card">
-        <div>
-          <h2>Backup</h2>
-          <p>Your data is stored only on this device. Export a backup before clearing Safari data or changing phones.</p>
-        </div>
-        <div class="backup-actions">
-          <button class="secondary-btn" id="exportBtn">Export JSON</button>
-          <label class="secondary-btn file-label">
-            Import JSON
-            <input id="importFile" type="file" accept="application/json" hidden />
-          </label>
-        </div>
-      </section>
-    </main>
-  </div>
+<dialog id="tripDialog" class="modal"><form id="tripForm" class="modal-card"><input type="hidden" id="tripEditId"/><div class="modal-heading"><div><span class="eyebrow">TRIP</span><h2>Add trip budget</h2></div><button class="icon-btn close-modal" type="button">×</button></div><label>Trip name<input id="tripName" required placeholder="e.g. Bangkok 2026" /></label><label>Budget<div class="currency-input"><span>₹</span><input id="tripBudget" type="number" min="0" required /></div></label><div class="form-row"><label>Start date<input id="tripStart" type="date" /></label><label>End date<input id="tripEnd" type="date" /></label></div><div class="modal-actions"><button type="button" class="secondary-btn close-modal">Cancel</button><button class="primary-btn">Save trip</button></div></form></dialog>
 
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+<dialog id="currencyDialog" class="modal"><form id="currencyForm" class="modal-card"><input type="hidden" id="currencyEditId"/><div class="modal-heading"><div><span class="eyebrow">CURRENCY</span><h2>Add foreign currency</h2></div><button class="icon-btn close-modal" type="button">×</button></div><div class="form-row"><label>Currency code<input id="currencyCode" required maxlength="3" placeholder="USD" /></label><label>Amount<input id="currencyAmount" type="number" step="0.01" min="0" required placeholder="100" /></label></div><label>INR per 1 unit <span class="optional">auto-filled online; editable</span><input id="currencyRate" type="number" step="0.0001" min="0" required /></label><div class="modal-actions"><button type="button" class="secondary-btn close-modal">Cancel</button><button class="primary-btn">Save currency</button></div></form></dialog>
 
-  <script src="app.js"></script>
-</body>
-</html>
+<dialog id="goalDialog" class="modal"><form id="goalForm" class="modal-card"><div class="modal-heading"><div><span class="eyebrow">SAVINGS TARGET</span><h2>Create goal</h2></div><button class="icon-btn close-modal" type="button">×</button></div><label>Goal name<input id="goalName" required /></label><div class="form-row"><label>Target amount<div class="currency-input"><span>₹</span><input id="goalTarget" type="number" min="1" required /></div></label><label>Saved so far<div class="currency-input"><span>₹</span><input id="goalCurrent" type="number" min="0" value="0" required /></div></label></div><label>Target date<input id="goalDate" type="date" /></label><div class="modal-actions"><button type="button" class="secondary-btn close-modal">Cancel</button><button class="primary-btn">Save goal</button></div></form></dialog>
+
+<div id="toast" class="toast"></div><script src="./app.js"></script>
+</body></html>
