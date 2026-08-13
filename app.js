@@ -1,446 +1,93 @@
-const STORAGE_KEY = "ak-budget-pwa-transactions-v1";
-const THEME_KEY = "ak-budget-pwa-theme-v1";
-const CATEGORY_KEY = "ak-budget-pwa-categories-v2";
-
-const defaultCategories = {
-  expense: {
-    Food: ["Zomato", "Swiggy", "Groceries", "Dining out", "Other"],
-    Travel: ["Cab", "Metro", "Fuel", "Parking", "Other"],
-    Rent: ["House rent", "Maintenance", "Other"],
-    Shopping: ["Clothes", "Electronics", "Personal care", "Other"],
-    Bills: ["Electricity", "Water", "Gas", "Internet", "Mobile", "Other"],
-    Subscriptions: ["Netflix", "Spotify", "iCloud", "Other"],
-    Health: ["Doctor", "Medicine", "Tests", "Other"],
-    Other: ["Miscellaneous"]
-  },
-  income: {
-    Salary: ["Monthly salary", "Bonus", "Other"],
-    Freelance: ["Project", "Consulting", "Other"],
-    Gift: ["Family", "Friend", "Other"],
-    Refund: ["Shopping refund", "Travel refund", "Other"],
-    Interest: ["Savings", "FD", "Other"],
-    Other: ["Miscellaneous"]
-  }
+const STORAGE_KEY='pocketwise.v2';
+const OLD_STORAGE_KEY='pocketwise.v1';
+const inrFmt=new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0});
+const money=v=>inrFmt.format(Number(v||0));
+const now=new Date();
+const currentMonth=()=>`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+const defaultCategories=[
+  {id:'c-home',name:'Home',subcategories:['Rent','Utilities','Maintenance']},
+  {id:'c-grocery',name:'Groceries',subcategories:['Supermarket','Fresh produce']},
+  {id:'c-dining',name:'Dining',subcategories:['Restaurants','Coffee','Delivery']},
+  {id:'c-transport',name:'Transport',subcategories:['Fuel','Metro','Taxi']},
+  {id:'c-shopping',name:'Shopping',subcategories:['Clothing','Accessories','Home']},
+  {id:'c-health',name:'Health',subcategories:['Doctor','Pharmacy','Fitness']},
+  {id:'c-fun',name:'Fun',subcategories:['Movies','Events','Hobbies']}
+];
+const defaultData={
+  categories:defaultCategories,
+  transactions:[
+    {id:'t1',type:'income',amount:140000,currency:'INR',inrAmount:140000,description:'Monthly salary',category:'Income',subcategory:'',tripId:'',date:`${currentMonth()}-01`,note:''},
+    {id:'t2',type:'expense',amount:28500,currency:'INR',inrAmount:28500,description:'Rent',category:'Home',subcategory:'Rent',tripId:'',date:`${currentMonth()}-02`,note:''},
+    {id:'t3',type:'expense',amount:3200,currency:'INR',inrAmount:3200,description:'Groceries',category:'Groceries',subcategory:'Supermarket',tripId:'',date:`${currentMonth()}-05`,note:''},
+    {id:'t4',type:'expense',amount:1650,currency:'INR',inrAmount:1650,description:'Dinner out',category:'Dining',subcategory:'Restaurants',tripId:'',date:`${currentMonth()}-07`,note:''}
+  ],
+  budgets:[{id:'b1',category:'Home',amount:35000},{id:'b2',category:'Groceries',amount:12000},{id:'b3',category:'Dining',amount:8000},{id:'b4',category:'Transport',amount:7000}],
+  goals:[{id:'g1',name:'Emergency fund',target:300000,current:125000,date:''},{id:'g2',name:'Travel fund',target:150000,current:62000,date:''}],
+  trips:[], currencies:[]
 };
-
-const icons = {
-  Food: "🍽️", Zomato: "🍲", Swiggy: "🛵", Groceries: "🛒", "Dining out": "🍜",
-  Travel: "🚕", Cab: "🚖", Metro: "🚇", Fuel: "⛽", Parking: "🅿️",
-  Rent: "🏠", "House rent": "🏡", Maintenance: "🛠️",
-  Shopping: "🛍️", Clothes: "👕", Electronics: "📱", "Personal care": "🧴",
-  Bills: "🧾", Electricity: "💡", Water: "🚰", Gas: "🔥", Internet: "🌐", Mobile: "📞",
-  Subscriptions: "🔁", Netflix: "🎬", Spotify: "🎧", iCloud: "☁️",
-  Health: "💊", Doctor: "🩺", Medicine: "💊", Tests: "🧪",
-  Salary: "💼", Bonus: "🎉", Freelance: "💻", Project: "📁", Consulting: "🧠",
-  Gift: "🎁", Family: "👨‍👩‍👧", Friend: "🤝", Refund: "↩️", Interest: "📈", Other: "✨", Miscellaneous: "✨"
-};
-
-let transactions = loadTransactions();
-let categories = loadCategories();
-let editingId = null;
-
-const els = {
-  form: document.getElementById("transactionForm"),
-  amount: document.getElementById("amount"),
-  category: document.getElementById("category"),
-  subcategory: document.getElementById("subcategory"),
-  date: document.getElementById("date"),
-  note: document.getElementById("note"),
-  income: document.getElementById("incomeAmount"),
-  expense: document.getElementById("expenseAmount"),
-  list: document.getElementById("transactionList"),
-  bars: document.getElementById("categoryBars"),
-  topCategory: document.getElementById("topCategory"),
-  monthFilter: document.getElementById("monthFilter"),
-  monthLabel: document.getElementById("monthLabel"),
-  submitBtn: document.getElementById("submitBtn"),
-  cancelEdit: document.getElementById("cancelEdit"),
-  editHint: document.getElementById("editHint"),
-  toast: document.getElementById("toast"),
-  exportBtn: document.getElementById("exportBtn"),
-  importFile: document.getElementById("importFile"),
-  clearMonth: document.getElementById("clearMonth"),
-  themeToggle: document.getElementById("themeToggle"),
-  categoryForm: document.getElementById("categoryForm"),
-  newCategoryType: document.getElementById("newCategoryType"),
-  newCategoryName: document.getElementById("newCategoryName"),
-  newSubcategories: document.getElementById("newSubcategories"),
-  categoryList: document.getElementById("categoryList")
-};
-
-init();
-
-function init() {
-  applySavedTheme();
-  els.date.valueAsDate = new Date();
-  populateCategories("expense");
-  buildMonthFilter();
-  render();
-  registerEvents();
-  registerServiceWorker();
+let data=loadData(); let selectedMonth=currentMonth(); let deferredPrompt=null;
+function clone(v){return JSON.parse(JSON.stringify(v))}
+function loadData(){
+  try{
+    const v2=JSON.parse(localStorage.getItem(STORAGE_KEY)); if(v2)return normalize(v2);
+    const old=JSON.parse(localStorage.getItem(OLD_STORAGE_KEY)); if(old){const migrated=normalize(old);localStorage.setItem(STORAGE_KEY,JSON.stringify(migrated));return migrated}
+  }catch(e){}
+  return clone(defaultData);
 }
-
-function registerEvents() {
-  document.querySelectorAll('input[name="type"]').forEach(input => {
-    input.addEventListener("change", () => populateCategories(input.value));
-  });
-
-  els.category.addEventListener("change", () => populateSubcategories(getSelectedType(), els.category.value));
-
-  els.form.addEventListener("submit", event => {
-    event.preventDefault();
-    const type = getSelectedType();
-    const amount = Number(els.amount.value);
-    if (!amount || amount <= 0) return showToast("Enter a valid amount");
-
-    const payload = {
-      id: editingId || crypto.randomUUID(),
-      type,
-      amount,
-      category: els.category.value,
-      subcategory: els.subcategory.value,
-      date: els.date.value,
-      note: els.note.value.trim(),
-      updatedAt: new Date().toISOString()
-    };
-
-    if (editingId) {
-      transactions = transactions.map(tx => tx.id === editingId ? payload : tx);
-      showToast("Transaction updated");
-    } else {
-      transactions.unshift(payload);
-      showToast("Transaction added");
-    }
-
-    saveTransactions();
-    resetForm();
-    buildMonthFilter();
-    render();
-  });
-
-  els.categoryForm.addEventListener("submit", event => {
-    event.preventDefault();
-    const type = els.newCategoryType.value;
-    const name = cleanName(els.newCategoryName.value);
-    const subcats = els.newSubcategories.value
-      .split(",")
-      .map(cleanName)
-      .filter(Boolean);
-
-    if (!name) return showToast("Enter a category name");
-    if (!categories[type]) categories[type] = {};
-    if (categories[type][name]) return showToast("Category already exists");
-
-    categories[type][name] = subcats.length ? uniqueList(subcats) : ["General"];
-    saveCategories();
-    els.categoryForm.reset();
-    els.newCategoryType.value = type;
-    populateCategories(getSelectedType());
-    renderCategoryManager();
-    showToast("Category added");
-  });
-
-  els.cancelEdit.addEventListener("click", resetForm);
-  els.monthFilter.addEventListener("change", render);
-
-  els.exportBtn.addEventListener("click", exportData);
-  els.importFile.addEventListener("change", importData);
-
-  els.clearMonth.addEventListener("click", () => {
-    const month = els.monthFilter.value;
-    const filtered = getFilteredTransactions();
-    if (!filtered.length) return showToast("No transactions to clear");
-    if (!confirm(`Delete ${filtered.length} transaction(s) for ${formatMonth(month)}?`)) return;
-    const idsToDelete = new Set(filtered.map(tx => tx.id));
-    transactions = transactions.filter(tx => !idsToDelete.has(tx.id));
-    saveTransactions();
-    buildMonthFilter();
-    render();
-    showToast("Month cleared");
-  });
-
-  els.themeToggle.addEventListener("click", () => {
-    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem(THEME_KEY, next);
-    els.themeToggle.textContent = next === "dark" ? "☀" : "☾";
-  });
+function normalize(d){
+  d.categories=d.categories?.length?d.categories:clone(defaultCategories);d.trips=d.trips||[];d.currencies=d.currencies||[];d.budgets=d.budgets||[];d.goals=d.goals||[];d.transactions=(d.transactions||[]).map(t=>({...t,currency:t.currency||'INR',inrAmount:Number(t.inrAmount??t.amount),subcategory:t.subcategory||'',tripId:t.tripId||''}));return d;
 }
+function saveData(){localStorage.setItem(STORAGE_KEY,JSON.stringify(data))}
+function monthTx(){return data.transactions.filter(t=>t.date?.startsWith(selectedMonth))}
+function expenses(){return monthTx().filter(t=>t.type==='expense')}
+function income(){return monthTx().filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.inrAmount??t.amount),0)}
+function spent(){return expenses().reduce((s,t)=>s+Number(t.inrAmount??t.amount),0)}
+function totalBudget(){return data.budgets.reduce((s,b)=>s+Number(b.amount),0)}
+function spentBy(category){return expenses().filter(t=>t.category===category).reduce((s,t)=>s+Number(t.inrAmount??t.amount),0)}
+function tripSpent(id){return data.transactions.filter(t=>t.type==='expense'&&t.tripId===id).reduce((s,t)=>s+Number(t.inrAmount??t.amount),0)}
+function pct(a,b){return b?Math.round((a/b)*100):0}
+function escapeHtml(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
+function iconFor(cat){const map={Home:'⌂',Groceries:'◒',Dining:'♨',Transport:'↗',Shopping:'◇',Health:'✚',Fun:'✦',Income:'↓'};return map[cat]||'•'}
+function showToast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2200)}
+function fxFor(code){if(code==='INR')return 1;return Number(data.currencies.find(c=>c.code===code)?.rate||0)}
+function formatForeign(amount,code){try{return new Intl.NumberFormat('en-IN',{style:'currency',currency:code,maximumFractionDigits:2}).format(amount)}catch{return `${Number(amount).toFixed(2)} ${code}`}}
+function setView(name){document.querySelectorAll('.view').forEach(v=>v.classList.remove('active-view'));document.getElementById(`${name}View`)?.classList.add('active-view');document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===name));const titles={dashboard:'Money overview',transactions:'Transactions',budgets:'Budgets & categories',trips:'Trip budgets',currencies:'Currencies',goals:'Savings goals',insights:'Budget insights'};document.getElementById('pageTitle').textContent=titles[name]||'PocketWise';window.scrollTo({top:0,behavior:'smooth'})}
+function render(){renderDashboard();renderTransactions();renderBudgets();renderCategories();renderTrips();renderCurrencies();renderGoals();renderInsights();populateSelectors()}
+function renderDashboard(){const inc=income(),sp=spent(),bud=totalBudget(),left=inc-sp,save=Math.max(0,left),use=pct(sp,bud),saveRate=pct(save,inc);let score=inc?Math.max(15,Math.min(99,60+Math.min(20,Math.round(saveRate*.35))-Math.max(0,Math.round((use-85)*.45)))):50;
+  document.getElementById('heroMonth').textContent=new Date(`${selectedMonth}-01T00:00`).toLocaleDateString('en-IN',{month:'long',year:'numeric'});document.getElementById('availableToSpend').textContent=money(left);document.getElementById('heroIncome').textContent=money(inc);document.getElementById('heroSpent').textContent=money(sp);document.getElementById('heroSaved').textContent=money(save);document.getElementById('heroProgressBar').style.width=`${Math.min(100,use)}%`;document.getElementById('budgetScore').textContent=score;document.getElementById('savingsRate').textContent=`${saveRate}%`;document.getElementById('budgetUsed').textContent=`${use}%`;document.getElementById('healthChip').textContent=use>100?'Over budget':use>80?'Watch spending':'On track';document.getElementById('scoreMessage').textContent=inc===0?'Add income and spending to see your score.':saveRate>=20?'Strong savings pace. Keep protecting your high-priority categories.':saveRate>=10?'Solid start. A little more room between income and spending would strengthen the month.':'Your savings cushion is thin this month. Focus on flexible categories first.';
+  document.getElementById('budgetCards').innerHTML=data.budgets.slice(0,4).map(b=>budgetCard(b)).join('')||'<div class="empty-state">No budgets yet.</div>';
+  document.getElementById('recentTransactions').innerHTML=[...monthTx()].sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5).map(txRow).join('')||'<div class="empty-state">No transactions this month.</div>';
+  document.getElementById('tripPreview').innerHTML=data.trips.slice(0,3).map(t=>{const s=tripSpent(t.id);return `<div class="mini-line"><div><strong>${escapeHtml(t.name)}</strong><span>${money(s)} of ${money(t.budget)}</span></div><span class="soft-badge">${pct(s,t.budget)}%</span></div>`}).join('')||'<div class="empty-state">No trips yet.</div>';
+  document.getElementById('currencyPreview').innerHTML=data.currencies.slice(0,3).map(c=>`<div class="mini-line"><div><strong>${escapeHtml(c.code)} · ${formatForeign(c.amount,c.code)}</strong><span>1 ${c.code} = ${money(c.rate)}</span></div><strong>${money(c.amount*c.rate)}</strong></div>`).join('')||'<div class="empty-state">No foreign currencies yet.</div>';drawChart();}
+function budgetCard(b){const s=spentBy(b.category),p=pct(s,b.amount);return `<div class="budget-card"><div class="budget-card-top"><div class="category-icon">${iconFor(b.category)}</div><span class="soft-badge">${p}%</span></div><h4>${escapeHtml(b.category)}</h4><p>${money(Math.max(0,b.amount-s))} left</p><div class="budget-value-row"><strong>${money(s)}</strong><span>of ${money(b.amount)}</span></div><div class="progress"><div style="width:${Math.min(100,p)}%;background:${p>100?'#d95c63':p>80?'#d98c28':'#7357ff'}"></div></div></div>`}
+function txRow(t){const trip=data.trips.find(x=>x.id===t.tripId);return `<div class="transaction-row"><div class="tx-icon">${iconFor(t.category)}</div><div><strong>${escapeHtml(t.description)}</strong><p>${escapeHtml(t.category)}${t.subcategory?` › ${escapeHtml(t.subcategory)}`:''}${trip?` · ✈ ${escapeHtml(trip.name)}`:''} · ${new Date(`${t.date}T00:00`).toLocaleDateString('en-IN',{day:'numeric',month:'short'})}</p></div><div class="tx-amount ${t.type==='income'?'income':''}">${t.type==='income'?'+':'-'}${money(t.inrAmount??t.amount)}</div></div>`}
+function renderTransactions(){const q=(document.getElementById('transactionSearch')?.value||'').toLowerCase(),filter=document.getElementById('transactionFilter')?.value||'all',tripFilter=document.getElementById('tripFilter')?.value||'all';const tx=[...monthTx()].filter(t=>(filter==='all'||t.type===filter)&&(tripFilter==='all'||(tripFilter==='none'?!t.tripId:t.tripId===tripFilter))&&(`${t.description} ${t.category} ${t.subcategory} ${t.note}`.toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date));document.getElementById('transactionTable').innerHTML=`<div class="table-head"><span>Description</span><span>Category</span><span>Trip</span><span>Date</span><span>Original</span><span>INR</span><span></span></div>${tx.map(t=>{const trip=data.trips.find(x=>x.id===t.tripId);return `<div class="table-line"><div class="desc"><strong>${escapeHtml(t.description)}</strong><span>${escapeHtml(t.note||'No note')}</span></div><span>${escapeHtml(t.category)}${t.subcategory?` › ${escapeHtml(t.subcategory)}`:''}</span><span>${trip?`✈ ${escapeHtml(trip.name)}`:'—'}</span><span>${new Date(`${t.date}T00:00`).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'})}</span><span>${formatForeign(t.amount,t.currency||'INR')}</span><strong class="tx-amount ${t.type==='income'?'income':''}">${t.type==='income'?'+':'-'}${money(t.inrAmount??t.amount)}</strong><div class="row-actions"><button class="icon-action" data-edit-tx="${t.id}">✎</button><button class="delete-btn" data-delete-tx="${t.id}">×</button></div></div>`}).join('')||'<div class="empty-state">No matching transactions.</div>'}`}
+function renderBudgets(){document.getElementById('budgetManager').innerHTML=data.budgets.map(b=>{const s=spentBy(b.category),p=pct(s,b.amount);return `<article class="manager-card"><div class="card-heading"><div class="category-icon">${iconFor(b.category)}</div><span class="soft-badge">${p}% used</span></div><h3>${escapeHtml(b.category)}</h3><div class="large-amount">${money(b.amount)}</div><div class="meta">${money(Math.max(0,b.amount-s))} remaining</div><div class="progress" style="margin-top:16px"><div style="width:${Math.min(100,p)}%"></div></div><div class="manager-actions"><span class="meta">Spent ${money(s)}</span><div><button class="text-btn" data-edit-budget="${b.id}">Edit</button><button class="danger-link" data-delete-budget="${b.id}">Remove</button></div></div></article>`}).join('')||'<div class="empty-state">Create your first category budget.</div>'}
+function renderCategories(){document.getElementById('categoryManager').innerHTML=data.categories.map(c=>`<article class="manager-card"><div class="card-heading"><div class="category-icon">${iconFor(c.name)}</div><span class="soft-badge">${c.subcategories.length} subcategories</span></div><h3>${escapeHtml(c.name)}</h3><div class="tag-wrap">${c.subcategories.map(s=>`<span class="tag">${escapeHtml(s)}</span>`).join('')||'<span class="meta">No subcategories</span>'}</div><div class="manager-actions"><button class="text-btn" data-edit-category="${c.id}">Edit</button><button class="danger-link" data-delete-category="${c.id}">Delete</button></div></article>`).join('')||'<div class="empty-state">Add your first category.</div>'}
+function renderTrips(){document.getElementById('tripManager').innerHTML=data.trips.map(t=>{const s=tripSpent(t.id),p=pct(s,t.budget);return `<article class="manager-card"><div class="card-heading"><div class="goal-symbol">✈</div><span class="soft-badge">${p}% used</span></div><h3>${escapeHtml(t.name)}</h3><div class="large-amount">${money(t.budget)}</div><div class="meta">Trip budget · ${money(Math.max(0,t.budget-s))} remaining</div><div class="progress" style="margin-top:16px"><div style="width:${Math.min(100,p)}%;background:${p>100?'#d95c63':'#7357ff'}"></div></div><div class="trip-dates">${t.start||t.end?`${t.start||'—'} → ${t.end||'—'}`:'No dates set'}</div><div class="manager-actions"><span class="meta">Spent ${money(s)}</span><div><button class="text-btn" data-edit-trip="${t.id}">Edit</button><button class="danger-link" data-delete-trip="${t.id}">Delete</button></div></div></article>`}).join('')||'<div class="empty-state">Create a trip to start tracking travel spend.</div>'}
+function renderCurrencies(){const total=data.currencies.reduce((s,c)=>s+Number(c.amount)*Number(c.rate),0);document.getElementById('currencyTotal').textContent=money(total);document.getElementById('currencyManager').innerHTML=data.currencies.map(c=>`<article class="manager-card"><div class="card-heading"><div class="currency-code">${escapeHtml(c.code)}</div><span class="soft-badge">${c.updated?new Date(c.updated).toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'manual'}</span></div><h3>${formatForeign(c.amount,c.code)}</h3><div class="large-amount">${money(c.amount*c.rate)}</div><div class="meta">1 ${escapeHtml(c.code)} = ${money(c.rate)}</div><div class="manager-actions"><button class="text-btn" data-refresh-currency="${c.id}">Refresh</button><div><button class="text-btn" data-edit-currency="${c.id}">Edit</button><button class="danger-link" data-delete-currency="${c.id}">Delete</button></div></div></article>`).join('')||'<div class="empty-state">Add USD, EUR, THB or any supported currency.</div>'}
+function renderGoals(){document.getElementById('goalManager').innerHTML=data.goals.map(g=>{const p=pct(g.current,g.target);return `<article class="manager-card"><div class="card-heading"><div class="goal-symbol">◇</div><strong>${p}%</strong></div><h3>${escapeHtml(g.name)}</h3><div class="large-amount">${money(g.current)}</div><div class="meta">saved of ${money(g.target)}</div><div class="progress" style="margin-top:16px"><div style="width:${Math.min(100,p)}%"></div></div><div class="manager-actions"><button class="text-btn" data-add-goal="${g.id}">+ Add savings</button><button class="danger-link" data-delete-goal="${g.id}">Remove</button></div></article>`}).join('')||'<div class="empty-state">Create your first savings goal.</div>'}
+function renderInsights(){const inc=income(),sp=spent(),save=inc-sp,over=data.budgets.map(b=>({...b,spent:spentBy(b.category)})).filter(b=>b.spent>b.amount).sort((a,b)=>(b.spent-b.amount)-(a.spent-a.amount));const tripOver=data.trips.map(t=>({...t,spent:tripSpent(t.id)})).filter(t=>t.budget&&t.spent>t.budget)[0];const cards=[{i:'↗',t:'Savings pace',p:inc?`You are keeping ${pct(Math.max(0,save),inc)}% of your income this month.`:'Add income to calculate your savings rate.'},{i:'◎',t:'Budget pressure',p:over.length?`${over[0].category} is ${money(over[0].spent-over[0].amount)} over its limit.`:'You are within all category limits this month.'},{i:'✈',t:'Trip watch',p:tripOver?`${tripOver.name} is ${money(tripOver.spent-tripOver.budget)} over budget.`:data.trips.length?'Your tracked trips are within budget.':'Add a trip to get travel budget signals.'}];document.getElementById('insightCards').innerHTML=cards.map(c=>`<div class="insight-card"><div class="insight-icon">${c.i}</div><h3>${c.t}</h3><p>${c.p}</p></div>`).join('');const rows=data.categories.map(c=>({category:c.name,spent:spentBy(c.name)})).filter(x=>x.spent>0).sort((a,b)=>b.spent-a.spent),max=rows[0]?.spent||1;document.getElementById('spendingBreakdown').innerHTML=rows.map(r=>`<div class="breakdown-row"><span>${escapeHtml(r.category)}</span><div class="breakdown-bar"><div style="width:${(r.spent/max)*100}%"></div></div><strong>${money(r.spent)}</strong></div>`).join('')||'<div class="empty-state">No spending to analyze yet.</div>'}
+function populateSelectors(){const type=document.getElementById('transactionType').value,catSel=document.getElementById('transactionCategory'),current=catSel.value;if(type==='income'){catSel.innerHTML='<option>Income</option>'}else{catSel.innerHTML=data.categories.map(c=>`<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join('')+`<option value="Other">Other</option>`;if([...catSel.options].some(o=>o.value===current))catSel.value=current}populateSubcategories();document.getElementById('budgetCategory').innerHTML=data.categories.map(c=>`<option>${escapeHtml(c.name)}</option>`).join('');document.getElementById('transactionTrip').innerHTML='<option value="">No trip</option>'+data.trips.map(t=>`<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');const tf=document.getElementById('tripFilter'),old=tf.value;tf.innerHTML='<option value="all">All trips</option><option value="none">No trip</option>'+data.trips.map(t=>`<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('');if([...tf.options].some(o=>o.value===old))tf.value=old;document.getElementById('transactionCurrency').innerHTML='<option value="INR">INR</option>'+data.currencies.map(c=>`<option value="${c.code}">${c.code}</option>`).join('')}
+function populateSubcategories(){const cat=document.getElementById('transactionCategory').value,sel=document.getElementById('transactionSubcategory'),old=sel.value,found=data.categories.find(c=>c.name===cat);sel.innerHTML='<option value="">None</option>'+((found?.subcategories)||[]).map(s=>`<option>${escapeHtml(s)}</option>`).join('');if([...sel.options].some(o=>o.value===old))sel.value=old}
+function drawChart(){const c=document.getElementById('cashflowChart'),ctx=c.getContext('2d'),w=c.width,h=c.height;ctx.clearRect(0,0,w,h);const days=new Date(Number(selectedMonth.slice(0,4)),Number(selectedMonth.slice(5,7)),0).getDate(),buckets=6,step=Math.ceil(days/buckets),ins=[],outs=[];for(let i=0;i<buckets;i++){const end=Math.min(days,(i+1)*step);ins.push(monthTx().filter(t=>t.type==='income'&&Number(t.date.slice(8,10))<=end).reduce((s,t)=>s+Number(t.inrAmount??t.amount),0));outs.push(monthTx().filter(t=>t.type==='expense'&&Number(t.date.slice(8,10))<=end).reduce((s,t)=>s+Number(t.inrAmount??t.amount),0))}const max=Math.max(...ins,...outs,1)*1.08;ctx.strokeStyle='#e8e9ee';ctx.lineWidth=1;for(let y=25;y<h-25;y+=55){ctx.beginPath();ctx.moveTo(35,y);ctx.lineTo(w-20,y);ctx.stroke()}function plot(arr,color){ctx.strokeStyle=color;ctx.lineWidth=4;ctx.beginPath();arr.forEach((v,i)=>{const x=40+i*(w-70)/(buckets-1),y=h-35-(v/max)*(h-60);i?ctx.lineTo(x,y):ctx.moveTo(x,y)});ctx.stroke()}plot(ins,'#7357ff');plot(outs,'#1f2937')}
+function openTx(tx=null){document.getElementById('transactionForm').reset();document.getElementById('transactionEditId').value=tx?.id||'';document.getElementById('transactionDialogTitle').textContent=tx?'Edit transaction':'Add transaction';const type=tx?.type||'expense';document.getElementById('transactionType').value=type;document.querySelectorAll('.segment').forEach(x=>x.classList.toggle('active',x.dataset.type===type));populateSelectors();document.getElementById('transactionDate').value=tx?.date||`${selectedMonth}-${String(Math.min(now.getDate(),28)).padStart(2,'0')}`;if(tx){document.getElementById('transactionAmount').value=tx.amount;document.getElementById('transactionDescription').value=tx.description;document.getElementById('transactionCategory').value=tx.category;populateSubcategories();document.getElementById('transactionSubcategory').value=tx.subcategory||'';document.getElementById('transactionTrip').value=tx.tripId||'';document.getElementById('transactionNote').value=tx.note||'';document.getElementById('transactionCurrency').value=tx.currency||'INR'}updateTxInrPreview();document.getElementById('transactionDialog').showModal()}
+function updateTxInrPreview(){const code=document.getElementById('transactionCurrency').value,amount=Number(document.getElementById('transactionAmount').value||0),rate=fxFor(code);document.getElementById('transactionCurrencySymbol').textContent=code==='INR'?'₹':code;document.getElementById('transactionInrPreview').value=rate?money(amount*rate):'Add FX rate first'}
+async function fetchRate(code){code=code.toUpperCase();if(code==='INR')return 1;const res=await fetch(`https://api.frankfurter.dev/v2/rate/${encodeURIComponent(code)}/INR`);if(!res.ok)throw new Error('Rate unavailable');const j=await res.json();if(!j?.rate)throw new Error('INR rate unavailable');return Number(j.rate)}
+async function refreshCurrency(c){try{const r=await fetchRate(c.code);c.rate=r;c.updated=new Date().toISOString();saveData();render();showToast(`${c.code} rate refreshed`)}catch(e){showToast(`Could not refresh ${c.code}; saved rate kept`)}}
+function openBudget(b=null){document.getElementById('budgetForm').reset();document.getElementById('budgetEditId').value=b?.id||'';populateSelectors();if(b){document.getElementById('budgetCategory').value=b.category;document.getElementById('budgetAmount').value=b.amount}document.getElementById('budgetDialog').showModal()}
+function openCategory(c=null){document.getElementById('categoryForm').reset();document.getElementById('categoryEditId').value=c?.id||'';document.getElementById('categoryDialogTitle').textContent=c?'Edit category':'Add category';if(c){document.getElementById('categoryName').value=c.name;document.getElementById('categorySubcategories').value=c.subcategories.join(', ')}document.getElementById('categoryDialog').showModal()}
+function openTrip(t=null){document.getElementById('tripForm').reset();document.getElementById('tripEditId').value=t?.id||'';if(t){document.getElementById('tripName').value=t.name;document.getElementById('tripBudget').value=t.budget;document.getElementById('tripStart').value=t.start||'';document.getElementById('tripEnd').value=t.end||''}document.getElementById('tripDialog').showModal()}
+function openCurrency(c=null){document.getElementById('currencyForm').reset();document.getElementById('currencyEditId').value=c?.id||'';if(c){document.getElementById('currencyCode').value=c.code;document.getElementById('currencyAmount').value=c.amount;document.getElementById('currencyRate').value=c.rate}document.getElementById('currencyDialog').showModal()}
 
-function getSelectedType() {
-  return document.querySelector('input[name="type"]:checked').value;
-}
-
-function populateCategories(type, selectedCategory = "") {
-  const names = Object.keys(categories[type] || {});
-  els.category.innerHTML = names.map(cat => `<option value="${escapeAttr(cat)}">${escapeHtml(cat)}</option>`).join("");
-  if (selectedCategory && names.includes(selectedCategory)) els.category.value = selectedCategory;
-  populateSubcategories(type, els.category.value);
-}
-
-function populateSubcategories(type, category, selectedSubcategory = "") {
-  const values = categories[type]?.[category] || ["General"];
-  els.subcategory.innerHTML = values.map(sub => `<option value="${escapeAttr(sub)}">${escapeHtml(sub)}</option>`).join("");
-  if (selectedSubcategory && values.includes(selectedSubcategory)) els.subcategory.value = selectedSubcategory;
-}
-
-function render() {
-  const visible = getFilteredTransactions();
-  const income = visible.filter(tx => tx.type === "income").reduce((sum, tx) => sum + tx.amount, 0);
-  const expense = visible.filter(tx => tx.type === "expense").reduce((sum, tx) => sum + tx.amount, 0);
-
-  els.income.textContent = money(income);
-  els.expense.textContent = money(expense);
-  els.monthLabel.textContent = formatMonth(els.monthFilter.value);
-
-  renderTransactions(visible);
-  renderCategoryBars(visible);
-  renderCategoryManager();
-}
-
-function renderTransactions(items) {
-  if (!items.length) {
-    els.list.innerHTML = `<p class="empty-state">No transactions for this month.</p>`;
-    return;
-  }
-
-  els.list.innerHTML = [...items]
-    .sort((a, b) => new Date(b.date) - new Date(a.date))
-    .map(tx => {
-      const sub = tx.subcategory || "General";
-      const title = tx.note || sub || tx.category;
-      return `
-        <article class="transaction-item">
-          <div class="tx-icon">${icons[sub] || icons[tx.category] || "✨"}</div>
-          <div class="tx-main">
-            <strong>${escapeHtml(title)}</strong>
-            <span>${escapeHtml(tx.category)} • ${escapeHtml(sub)} • ${formatDate(tx.date)}</span>
-          </div>
-          <div>
-            <div class="tx-amount ${tx.type}">${tx.type === "income" ? "+" : "-"}${money(tx.amount)}</div>
-            <div class="tx-actions">
-              <button class="mini-btn" onclick="editTransaction('${tx.id}')">Edit</button>
-              <button class="mini-btn" onclick="deleteTransaction('${tx.id}')">Delete</button>
-            </div>
-          </div>
-        </article>
-      `;
-    }).join("");
-}
-
-function renderCategoryBars(items) {
-  const expenses = items.filter(tx => tx.type === "expense");
-  if (!expenses.length) {
-    els.bars.innerHTML = `<p class="empty-state">Add expenses to see category insights.</p>`;
-    els.topCategory.textContent = "No expenses yet";
-    return;
-  }
-
-  const totals = expenses.reduce((acc, tx) => {
-    const key = tx.subcategory || tx.category;
-    acc[key] = (acc[key] || 0) + tx.amount;
-    return acc;
-  }, {});
-
-  const rows = Object.entries(totals).sort((a, b) => b[1] - a[1]);
-  const max = rows[0][1];
-  els.topCategory.textContent = `Top: ${rows[0][0]}`;
-
-  els.bars.innerHTML = rows.map(([cat, total]) => `
-    <div class="bar-row">
-      <div class="bar-meta"><span>${icons[cat] || "✨"} ${escapeHtml(cat)}</span><strong>${money(total)}</strong></div>
-      <div class="bar-track"><div class="bar-fill" style="width: ${(total / max) * 100}%"></div></div>
-    </div>
-  `).join("");
-}
-
-function renderCategoryManager() {
-  const expenseCount = Object.keys(categories.expense || {}).length;
-  const incomeCount = Object.keys(categories.income || {}).length;
-  els.categoryList.innerHTML = `
-    <div class="category-chip">Expense categories: <strong>${expenseCount}</strong></div>
-    <div class="category-chip">Income categories: <strong>${incomeCount}</strong></div>
-    <div class="category-chip">Food: <strong>Zomato, Swiggy</strong></div>
-    <div class="category-chip">Bills: <strong>Electricity</strong></div>
-  `;
-}
-
-window.editTransaction = function(id) {
-  const tx = transactions.find(item => item.id === id);
-  if (!tx) return;
-  editingId = id;
-  document.getElementById(tx.type).checked = true;
-  populateCategories(tx.type, tx.category);
-  populateSubcategories(tx.type, tx.category, tx.subcategory || "");
-  els.amount.value = tx.amount;
-  els.date.value = tx.date;
-  els.note.value = tx.note || "";
-  els.submitBtn.textContent = "Save changes";
-  els.cancelEdit.hidden = false;
-  els.editHint.textContent = "Editing";
-  window.scrollTo({ top: 180, behavior: "smooth" });
-};
-
-window.deleteTransaction = function(id) {
-  transactions = transactions.filter(tx => tx.id !== id);
-  saveTransactions();
-  buildMonthFilter();
-  render();
-  showToast("Transaction deleted");
-};
-
-function resetForm() {
-  editingId = null;
-  els.form.reset();
-  document.getElementById("expense").checked = true;
-  populateCategories("expense");
-  els.date.valueAsDate = new Date();
-  els.submitBtn.textContent = "Add transaction";
-  els.cancelEdit.hidden = true;
-  els.editHint.textContent = "New entry";
-}
-
-function buildMonthFilter() {
-  const currentMonth = monthKey(new Date());
-  const months = Array.from(new Set([currentMonth, ...transactions.map(tx => tx.date.slice(0, 7))])).sort().reverse();
-  const previous = els.monthFilter.value || currentMonth;
-  els.monthFilter.innerHTML = months.map(month => `<option value="${month}">${formatMonth(month)}</option>`).join("");
-  els.monthFilter.value = months.includes(previous) ? previous : currentMonth;
-}
-
-function getFilteredTransactions() {
-  const month = els.monthFilter.value || monthKey(new Date());
-  return transactions.filter(tx => tx.date.startsWith(month));
-}
-
-function exportData() {
-  const backup = { exportedAt: new Date().toISOString(), transactions, categories };
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `budget-backup-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast("Backup exported");
-}
-
-function importData(event) {
-  const file = event.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const parsed = JSON.parse(reader.result);
-      const imported = Array.isArray(parsed) ? parsed : parsed.transactions;
-      if (!Array.isArray(imported)) throw new Error("Invalid backup");
-      transactions = imported.filter(isValidTransaction).map(tx => ({ ...tx, subcategory: tx.subcategory || "General" }));
-      if (parsed.categories) categories = mergeCategories(defaultCategories, parsed.categories);
-      saveTransactions();
-      saveCategories();
-      buildMonthFilter();
-      populateCategories(getSelectedType());
-      render();
-      showToast("Backup imported");
-    } catch {
-      showToast("Invalid backup file");
-    } finally {
-      event.target.value = "";
-    }
-  };
-  reader.readAsText(file);
-}
-
-function isValidTransaction(tx) {
-  return tx && tx.id && ["income", "expense"].includes(tx.type) && Number(tx.amount) > 0 && tx.category && /^\d{4}-\d{2}-\d{2}$/.test(tx.date);
-}
-
-function loadTransactions() {
-  try { return (JSON.parse(localStorage.getItem(STORAGE_KEY)) || []).map(tx => ({ ...tx, subcategory: tx.subcategory || "General" })); }
-  catch { return []; }
-}
-
-function saveTransactions() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
-}
-
-function loadCategories() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(CATEGORY_KEY));
-    return mergeCategories(defaultCategories, saved || {});
-  } catch {
-    return structuredClone(defaultCategories);
-  }
-}
-
-function saveCategories() {
-  localStorage.setItem(CATEGORY_KEY, JSON.stringify(categories));
-}
-
-function mergeCategories(base, extra) {
-  const merged = structuredClone(base);
-  ["expense", "income"].forEach(type => {
-    Object.entries(extra?.[type] || {}).forEach(([category, subcats]) => {
-      const cleanCategory = cleanName(category);
-      if (!cleanCategory) return;
-      const values = Array.isArray(subcats) ? subcats.map(cleanName).filter(Boolean) : ["General"];
-      merged[type][cleanCategory] = uniqueList([...(merged[type][cleanCategory] || []), ...(values.length ? values : ["General"])]);
-    });
-  });
-  return merged;
-}
-
-function cleanName(value) {
-  return String(value || "").trim().replace(/\s+/g, " ").slice(0, 32);
-}
-
-function uniqueList(values) {
-  return Array.from(new Set(values));
-}
-
-function applySavedTheme() {
-  const saved = localStorage.getItem(THEME_KEY);
-  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-  const theme = saved || (prefersDark ? "dark" : "light");
-  document.documentElement.dataset.theme = theme;
-  els.themeToggle.textContent = theme === "dark" ? "☀" : "☾";
-}
-
-function money(value) {
-  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(value);
-}
-
-function monthKey(date) {
-  return date.toISOString().slice(0, 7);
-}
-
-function formatMonth(month) {
-  const [year, m] = month.split("-");
-  return new Date(Number(year), Number(m) - 1).toLocaleDateString("en-IN", { month: "short", year: "numeric" });
-}
-
-function formatDate(date) {
-  return new Date(date + "T00:00:00").toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
-}
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
-}
-
-function escapeAttr(value) {
-  return escapeHtml(value).replace(/`/g, "&#96;");
-}
-
-let toastTimer;
-function showToast(message) {
-  clearTimeout(toastTimer);
-  els.toast.textContent = message;
-  els.toast.classList.add("show");
-  toastTimer = setTimeout(() => els.toast.classList.remove("show"), 2200);
-}
-
-function registerServiceWorker() {
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => navigator.serviceWorker.register("service-worker.js"));
-  }
-}
+document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));document.querySelectorAll('[data-view-jump]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.viewJump)));['quickAddBtn','addTransactionBtn','mobileAddBtn'].forEach(id=>document.getElementById(id).addEventListener('click',()=>openTx()));document.getElementById('addBudgetBtn').onclick=()=>openBudget();document.getElementById('addCategoryBtn').onclick=()=>openCategory();document.getElementById('addTripBtn').onclick=()=>openTrip();document.getElementById('addCurrencyBtn').onclick=()=>openCurrency();document.getElementById('addGoalBtn').onclick=()=>document.getElementById('goalDialog').showModal();document.querySelectorAll('.close-modal').forEach(b=>b.addEventListener('click',()=>b.closest('dialog').close()));document.querySelectorAll('.segment').forEach(b=>b.addEventListener('click',()=>{document.querySelectorAll('.segment').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById('transactionType').value=b.dataset.type;populateSelectors()}));document.getElementById('transactionCategory').addEventListener('change',populateSubcategories);document.getElementById('transactionAmount').addEventListener('input',updateTxInrPreview);document.getElementById('transactionCurrency').addEventListener('change',updateTxInrPreview);
+document.getElementById('transactionForm').addEventListener('submit',e=>{e.preventDefault();const id=document.getElementById('transactionEditId').value,code=document.getElementById('transactionCurrency').value,amount=Number(document.getElementById('transactionAmount').value),rate=fxFor(code);if(!rate){showToast(`Add a ${code} exchange rate first`);return}const tx={id:id||crypto.randomUUID(),type:document.getElementById('transactionType').value,amount,currency:code,inrAmount:amount*rate,description:document.getElementById('transactionDescription').value.trim(),category:document.getElementById('transactionCategory').value,subcategory:document.getElementById('transactionSubcategory').value,tripId:document.getElementById('transactionTrip').value,date:document.getElementById('transactionDate').value,note:document.getElementById('transactionNote').value.trim()};if(id)data.transactions[data.transactions.findIndex(x=>x.id===id)]=tx;else data.transactions.push(tx);saveData();e.target.closest('dialog').close();render();showToast(id?'Transaction updated':'Transaction saved')});
+document.getElementById('budgetForm').addEventListener('submit',e=>{e.preventDefault();const id=document.getElementById('budgetEditId').value,b={id:id||crypto.randomUUID(),category:document.getElementById('budgetCategory').value,amount:Number(document.getElementById('budgetAmount').value)};if(id)data.budgets[data.budgets.findIndex(x=>x.id===id)]=b;else{const existing=data.budgets.find(x=>x.category===b.category);existing?existing.amount=b.amount:data.budgets.push(b)}saveData();e.target.closest('dialog').close();render();showToast('Budget saved')});
+document.getElementById('categoryForm').addEventListener('submit',e=>{e.preventDefault();const id=document.getElementById('categoryEditId').value,name=document.getElementById('categoryName').value.trim(),subs=[...new Set(document.getElementById('categorySubcategories').value.split(',').map(x=>x.trim()).filter(Boolean))];if(!name)return;const duplicate=data.categories.find(c=>c.name.toLowerCase()===name.toLowerCase()&&c.id!==id);if(duplicate){showToast('Category name already exists');return}if(id){const c=data.categories.find(x=>x.id===id),old=c.name;c.name=name;c.subcategories=subs;if(old!==name){data.transactions.forEach(t=>{if(t.category===old)t.category=name});data.budgets.forEach(b=>{if(b.category===old)b.category=name})}}else data.categories.push({id:crypto.randomUUID(),name,subcategories:subs});saveData();e.target.closest('dialog').close();render();showToast('Category saved')});
+document.getElementById('tripForm').addEventListener('submit',e=>{e.preventDefault();const id=document.getElementById('tripEditId').value,t={id:id||crypto.randomUUID(),name:document.getElementById('tripName').value.trim(),budget:Number(document.getElementById('tripBudget').value),start:document.getElementById('tripStart').value,end:document.getElementById('tripEnd').value};if(id)data.trips[data.trips.findIndex(x=>x.id===id)]=t;else data.trips.push(t);saveData();e.target.closest('dialog').close();render();showToast('Trip saved')});
+document.getElementById('currencyForm').addEventListener('submit',e=>{e.preventDefault();const id=document.getElementById('currencyEditId').value,code=document.getElementById('currencyCode').value.trim().toUpperCase(),c={id:id||crypto.randomUUID(),code,amount:Number(document.getElementById('currencyAmount').value),rate:Number(document.getElementById('currencyRate').value),updated:new Date().toISOString()};if(code==='INR'){showToast('INR is already the base currency');return}const dup=data.currencies.find(x=>x.code===code&&x.id!==id);if(dup){showToast(`${code} already exists`);return}if(id)data.currencies[data.currencies.findIndex(x=>x.id===id)]=c;else data.currencies.push(c);saveData();e.target.closest('dialog').close();render();showToast('Currency saved')});
+document.getElementById('currencyCode').addEventListener('blur',async e=>{const code=e.target.value.trim().toUpperCase();if(code.length!==3)return;try{const r=await fetchRate(code);document.getElementById('currencyRate').value=r;showToast(`${code} rate loaded`)}catch{}});
+document.getElementById('goalForm').addEventListener('submit',e=>{e.preventDefault();data.goals.push({id:crypto.randomUUID(),name:document.getElementById('goalName').value.trim(),target:Number(document.getElementById('goalTarget').value),current:Number(document.getElementById('goalCurrent').value),date:document.getElementById('goalDate').value});saveData();e.target.reset();e.target.closest('dialog').close();render();showToast('Goal created')});
+document.addEventListener('click',e=>{const d=e.target.dataset;if(d.deleteTx){data.transactions=data.transactions.filter(x=>x.id!==d.deleteTx);saveData();render();showToast('Transaction deleted')}if(d.editTx)openTx(data.transactions.find(x=>x.id===d.editTx));if(d.deleteBudget){data.budgets=data.budgets.filter(x=>x.id!==d.deleteBudget);saveData();render();showToast('Budget removed')}if(d.editBudget)openBudget(data.budgets.find(x=>x.id===d.editBudget));if(d.editCategory)openCategory(data.categories.find(x=>x.id===d.editCategory));if(d.deleteCategory){const c=data.categories.find(x=>x.id===d.deleteCategory);if(c&&confirm(`Delete “${c.name}”? Existing transactions keep the category text, but it will no longer appear in new-entry dropdowns.`)){data.categories=data.categories.filter(x=>x.id!==d.deleteCategory);data.budgets=data.budgets.filter(x=>x.category!==c.name);saveData();render();showToast('Category deleted')}}if(d.editTrip)openTrip(data.trips.find(x=>x.id===d.editTrip));if(d.deleteTrip&&confirm('Delete this trip? Transactions will be kept but untagged.')){data.transactions.forEach(t=>{if(t.tripId===d.deleteTrip)t.tripId=''});data.trips=data.trips.filter(x=>x.id!==d.deleteTrip);saveData();render();showToast('Trip deleted')}if(d.editCurrency)openCurrency(data.currencies.find(x=>x.id===d.editCurrency));if(d.deleteCurrency){data.currencies=data.currencies.filter(x=>x.id!==d.deleteCurrency);saveData();render();showToast('Currency deleted')}if(d.refreshCurrency){const c=data.currencies.find(x=>x.id===d.refreshCurrency);if(c)refreshCurrency(c)}if(d.deleteGoal){data.goals=data.goals.filter(x=>x.id!==d.deleteGoal);saveData();render();showToast('Goal removed')}if(d.addGoal){const g=data.goals.find(x=>x.id===d.addGoal),amount=Number(prompt(`How much do you want to add to “${g.name}”?`));if(amount>0){g.current=Math.min(g.target,g.current+amount);saveData();render();showToast('Savings added')}}});
+document.getElementById('refreshRatesBtn').addEventListener('click',async()=>{for(const c of data.currencies)await refreshCurrency(c)});document.getElementById('transactionSearch').addEventListener('input',renderTransactions);document.getElementById('transactionFilter').addEventListener('change',renderTransactions);document.getElementById('tripFilter').addEventListener('change',renderTransactions);document.getElementById('monthPicker').value=selectedMonth;document.getElementById('monthPicker').addEventListener('change',e=>{selectedMonth=e.target.value||currentMonth();render()});document.getElementById('todayLabel').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long'}).toUpperCase();
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;document.getElementById('installBtn').hidden=false});document.getElementById('installBtn').addEventListener('click',async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();await deferredPrompt.userChoice;deferredPrompt=null;document.getElementById('installBtn').hidden=true});if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js'));render();
